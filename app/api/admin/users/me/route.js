@@ -7,14 +7,26 @@ export async function GET(req) {
     await dbConnect();
 
     const auth = await requireAuth(req);
-    if (!auth || !auth.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!auth?.user) {
+      return NextResponse.json(
+        { error: "Authentication required" }, 
+        { status: 401 }
+      );
     }
 
-    return NextResponse.json({ user: auth.user });
+    return NextResponse.json({ 
+      user: auth.user,
+      success: true 
+    });
     
   } catch (error) {
     console.error("Error fetching user:", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    return NextResponse.json(
+      { 
+        error: process.env.NODE_ENV === 'development' ? error.message : "Internal Server Error",
+        success: false 
+      }, 
+      { status: 500 }
+    );
   }
 }

@@ -9,21 +9,21 @@ const TOKEN_EXPIRATION = 14 * 24 * 60 * 60 * 1000; // 14 days
 export async function requireAuth(req) {
   try {
     await dbConnect();
-
-    // Try cookie first - make cookies() call async
-    const cookieStore = cookies();
-    const sessionCookie = await cookieStore.get(COOKIE_NAME)?.value;
+    
+    // Get cookie store and wait for it
+    const cookieStore = await cookies();
+    const sessionCookie = await cookieStore.get(COOKIE_NAME);
     let decoded;
 
-    if (sessionCookie) {
+    if (sessionCookie?.value) {
       try {
-        decoded = await admin.auth().verifySessionCookie(sessionCookie, true);
+        decoded = await admin.auth().verifySessionCookie(sessionCookie.value, true);
       } catch (cookieError) {
         console.warn("Invalid session cookie:", cookieError.message);
       }
     }
 
-    // Fallback to Bearer token if no valid cookie
+    // Bearer token fallback
     if (!decoded) {
       const authHeader = req.headers.get("authorization");
       if (!authHeader?.startsWith("Bearer ")) {
@@ -34,80 +34,49 @@ export async function requireAuth(req) {
       decoded = await admin.auth().verifyIdToken(token);
 
       // Create new session cookie
-      const sessionCookie = await admin.auth().createSessionCookie(token, {
+      const newSessionCookie = await admin.auth().createSessionCookie(token, {
         expiresIn: TOKEN_EXPIRATION
       });
 
-      // Set cookie for future requests - make cookies() call async
-      const cookieStore = cookies();
-      await cookieStore.set(COOKIE_NAME, sessionCookie, {
-        maxAge: TOKEN_EXPIRATION / 1000, // Convert to seconds
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        path: '/'
+      // Set cookie using async operation
+      await cookieStore.set({
+        name: COOKIE_NAME,
+        value: newSessionCookie,
+        options: {
+          maxAge: TOKEN_EXPIRATION / 1000,
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+          path: '/'
+        }
       });
     }
 
     // Get user from database
-    const user = await User.findOne({ uid: decoded.uid });
+    const user = await User.findOne({ uid: decoded.uid })
+      .select('-password -__v')
+      .lean();
+
     if (!user) {
       throw new Error("User not found in database");
     }
 
-    // Check if user is banned
-    if (user.isBanned) {
-      throw new Error("User is banned");
-    }
-
-    // Update last active timestamp
-    await User.findByIdAndUpdate(user._id, {
-      lastActive: new Date(),
-    });
-
     return {
       user,
-      token: decoded,
-      isAdmin: user.role === 'admin',
-      isModerator: user.role === 'moderator'
+      token: decoded
     };
 
   } catch (error) {
     console.error("Auth error:", error);
     
-    // Clear invalid cookie if present - make cookies() call async
-    const cookieStore = cookies();
-    if (await cookieStore.get(COOKIE_NAME)) {
+    // Handle cookie deletion asynchronously
+    const cookieStore = await cookies();
+    const existingCookie = await cookieStore.get(COOKIE_NAME);
+    
+    if (existingCookie) {
       await cookieStore.delete(COOKIE_NAME);
     }
-
-    throw new Error("Unauthorized: " + error.message);
+    
+    return null;
   }
-}
-
-// Helper to create session cookie
-export async function createSessionCookie(idToken) {
-  try {
-    const sessionCookie = await admin.auth().createSessionCookie(idToken, {
-      expiresIn: TOKEN_EXPIRATION
-    });
-
-    cookies().set(COOKIE_NAME, sessionCookie, {
-      maxAge: TOKEN_EXPIRATION / 1000,
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/'
-    });
-
-    return true;
-  } catch (error) {
-    console.error("Session cookie creation failed:", error);
-    return false;
-  }
-}
-
-// Helper to clear session
-export function clearSession() {
-  cookies().delete(COOKIE_NAME);
 }
