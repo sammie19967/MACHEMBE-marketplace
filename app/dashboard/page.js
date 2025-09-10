@@ -15,7 +15,7 @@ export default function Dashboard() {
         const token = await auth.currentUser?.getIdToken();
         if (!token) return;
 
-        const res = await fetch('/api/admin/users/me', {
+        const res = await fetch('/api/users/me', {
           headers: {
             'Authorization': `Bearer ${token}`
           }
