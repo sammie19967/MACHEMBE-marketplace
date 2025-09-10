@@ -43,8 +43,8 @@ export default function Login() {
         timer: 1500,
       });
 
-      // Only redirect to dashboard after successful login
-      router.push("/dashboard");
+      // Redirect to profile page after successful login
+      router.push("/profile");
     } catch (err) {
       setError(err.message);
       await showModal({
