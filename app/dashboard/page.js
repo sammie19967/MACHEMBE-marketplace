@@ -2,8 +2,10 @@
 import { useState, useEffect } from 'react';
 import { auth } from '@/lib/firebase-client';
 import { showModal } from '@/components/SweetModal';
+import { useRouter } from 'next/navigation';
 
 export default function Dashboard() {
+  const router = useRouter();
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -37,6 +39,32 @@ export default function Dashboard() {
     fetchUserData();
   }, []);
 
+  const handleSignOut = async () => {
+    try {
+      await auth.signOut();
+      
+      // Call backend to clear session
+      await fetch('/api/auth/logout', {
+        method: 'POST'
+      });
+
+      await showModal({
+        title: 'Success',
+        text: 'You have been signed out successfully',
+        icon: 'success',
+        timer: 1500
+      });
+
+      router.push('/auth/login');
+    } catch (error) {
+      showModal({
+        title: 'Error',
+        text: 'Failed to sign out. Please try again.',
+        icon: 'error'
+      });
+    }
+  };
+
   if (loading) {
     return <div className="flex items-center justify-center min-h-screen">
       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -47,7 +75,15 @@ export default function Dashboard() {
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-4xl mx-auto">
         <div className="bg-white rounded-lg shadow p-6">
-          <h1 className="text-2xl font-bold mb-6">User Dashboard</h1>
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-2xl font-bold">User Dashboard</h1>
+            <button
+              onClick={handleSignOut}
+              className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors"
+            >
+              Sign Out
+            </button>
+          </div>
           
           {user ? (
             <div className="space-y-6">

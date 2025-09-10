@@ -102,16 +102,19 @@ export default function Signup() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed to create account");
 
+      // Sign out the user after successful signup
+      await auth.signOut();
+
       // Show success modal
       await showModal({
         title: 'Success!',
-        text: 'Your account has been created successfully',
+        text: 'Account created successfully. Please login to continue.',
         icon: 'success',
-        timer: 1500
+        timer: 2000
       });
 
-      // 3. Redirect to dashboard on success
-      router.push("/dashboard");
+      // Redirect to login instead of dashboard
+      router.push("/auth/login");
     } catch (err) {
       setError(err.message);
       await showModal({

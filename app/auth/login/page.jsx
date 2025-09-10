@@ -9,16 +9,24 @@ import { showModal } from "@/components/SweetModal";
 export default function Login() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({ email: "", password: "" });
+  const [error, setError] = useState("");
 
-  async function login(email, password) {
+  async function login(e) {
+    e.preventDefault();
+
     try {
       setLoading(true);
-      
+
       // 1. Sign in with Firebase
-      const userCred = await signInWithEmailAndPassword(auth, email, password);
+      const userCred = await signInWithEmailAndPassword(
+        auth,
+        formData.email,
+        formData.password
+      );
       const token = await userCred.user.getIdToken();
 
-      // 2. Get user profile from MongoDB
+      // 2. Create session on backend
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -26,25 +34,23 @@ export default function Login() {
       });
 
       const data = await res.json();
-      
-      if (!res.ok) {
-        throw new Error(data.message || "Login failed");
-      }
+      if (!res.ok) throw new Error(data.message || "Login failed");
 
       await showModal({
-        title: 'Welcome back!',
-        text: 'Login successful',
-        icon: 'success',
-        timer: 1500
+        title: "Welcome back!",
+        text: "Login successful",
+        icon: "success",
+        timer: 1500,
       });
 
+      // Only redirect to dashboard after successful login
       router.push("/dashboard");
-      
     } catch (err) {
-      showModal({
-        title: 'Error',
+      setError(err.message);
+      await showModal({
+        title: "Error",
         text: err.message,
-        icon: 'error'
+        icon: "error",
       });
     } finally {
       setLoading(false);
@@ -59,7 +65,10 @@ export default function Login() {
         </h2>
         <p className="mt-2 text-center text-sm text-gray-600">
           Or{" "}
-          <Link href="/auth/signup" className="text-blue-600 hover:text-blue-500">
+          <Link
+            href="/auth/signup"
+            className="text-blue-600 hover:text-blue-500"
+          >
             create a new account
           </Link>
         </p>
@@ -67,17 +76,12 @@ export default function Login() {
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
-          <form
-            className="space-y-6"
-            onSubmit={(e) => {
-              e.preventDefault();
-              const email = e.target.email.value;
-              const password = e.target.password.value;
-              login(email, password);
-            }}
-          >
+          <form className="space-y-6" onSubmit={login}>
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+              <label
+                htmlFor="email"
+                className="block text-sm font-medium text-gray-700"
+              >
                 Email address
               </label>
               <input
@@ -86,12 +90,19 @@ export default function Login() {
                 type="email"
                 autoComplete="email"
                 required
+                value={formData.email}
+                onChange={(e) =>
+                  setFormData({ ...formData, email: e.target.value })
+                }
                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+              <label
+                htmlFor="password"
+                className="block text-sm font-medium text-gray-700"
+              >
                 Password
               </label>
               <input
@@ -100,13 +111,20 @@ export default function Login() {
                 type="password"
                 autoComplete="current-password"
                 required
+                value={formData.password}
+                onChange={(e) =>
+                  setFormData({ ...formData, password: e.target.value })
+                }
                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
 
             <div className="flex items-center justify-between">
               <div className="text-sm">
-                <Link href="/auth/forgot-password" className="text-blue-600 hover:text-blue-500">
+                <Link
+                  href="/auth/forgot-password"
+                  className="text-blue-600 hover:text-blue-500"
+                >
                   Forgot your password?
                 </Link>
               </div>
