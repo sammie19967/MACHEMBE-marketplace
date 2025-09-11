@@ -1,121 +1,133 @@
-import { NextResponse } from 'next/server';
-import { withAuth } from '@/middleware/withAuth';
-import User from '@/models/User';
-import dbConnect from '@/lib/mongodb';
+import { NextResponse } from "next/server";
+import dbConnect from "@/lib/mongodb";
+import User from "@/models/User";
+import { requireAuth } from "@/middleware/auth";
+import mongoose from "mongoose";
 
-// Allowed fields for update operations
-const ALLOWED_UPDATE_FIELDS = [
-  'name',
-  'phone',
-  'location',
-  'mpesaNumber',
-  'avatar',
-  'bio',
-  'dateOfBirth',
-  'gender',
-  'preferences'
-];
-
-// Helper function to format response
-function formatResponse(data, status = 200) {
-  return NextResponse.json({
-    success: status >= 200 && status < 300,
-    ...(status >= 400 ? { error: data.message || 'An error occurred' } : { data })
-  }, { status });
+// Helper function to check if a string is a valid MongoDB ObjectId
+function isValidObjectId(id) {
+  return mongoose.Types.ObjectId.isValid(id) && 
+         new mongoose.Types.ObjectId(id).toString() === id;
 }
+
 // GET /api/users/[id]
-// Get user by ID
-export const GET = withAuth(async (req) => {
+export async function GET(request, { params }) {
   try {
+    const { id } = await params;
+    const userId = id;
+    
     await dbConnect();
-    // Extract ID from URL path
-    const id = req.url.split('/').pop();
-
-    // Find user by Firebase UID
-    const user = await User.findOne({ uid: id })
-      .select('-__v -createdAt -updatedAt')
-      .lean();
-
-    if (!user) {
-      console.log(`User not found with UID: ${id}`);
-      return formatResponse({ message: 'User not found' }, 404);
+    
+    const authData = await requireAuth(request);
+    if (!authData) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    return formatResponse({ user });
+    const { user: authUser } = authData;
+
+    // Check if user is authorized to view this profile
+    // Allow if admin OR if the userId matches either authUser's _id or uid
+    const isAuthorized = 
+      authUser.role === "admin" || 
+      authUser._id.toString() === userId || 
+      authUser.uid === userId;
+
+    if (!isAuthorized) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    let foundUser;
+
+    // Only try to find by ObjectId if the ID is a valid ObjectId
+    if (isValidObjectId(userId)) {
+      foundUser = await User.findById(userId).select("-password -__v").lean();
+    }
+    
+    // If not found by _id (or ID wasn't a valid ObjectId), try to find by Firebase UID
+    if (!foundUser) {
+      foundUser = await User.findOne({ uid: userId }).select("-password -__v").lean();
+    }
+
+    if (!foundUser) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    return NextResponse.json(foundUser);
   } catch (error) {
-    console.error('Error fetching user:', error);
-    return formatResponse({ message: 'Failed to fetch user' }, 500);
-  }
-});
-
-// PATCH /api/users/[id]
-// Update user by ID
-export const PATCH = withAuth(async (req) => {
-  try {
-    await dbConnect();
-    // Extract ID from URL path
-    const id = req.url.split('/').pop();
-    const body = await req.json();
-    
-    // Filter and validate update data
-    const updateData = {};
-    Object.keys(body).forEach(key => {
-      if (ALLOWED_UPDATE_FIELDS.includes(key)) {
-        updateData[key] = body[key];
-      }
-    });
-
-    if (Object.keys(updateData).length === 0) {
-      return formatResponse({ message: 'No valid fields to update' }, 400);
-    }
-
-    const user = await User.findOneAndUpdate(
-      { uid: id },
-      { $set: updateData },
-      { new: true, runValidators: true }
-    ).select('-__v -createdAt -updatedAt');
-
-    if (!user) {
-      console.log(`User not found with UID: ${id}`);
-      return formatResponse({ message: 'User not found' }, 404);
-    }
-
-    return formatResponse({ user });
-  } catch (error) {
-    console.error('Error updating user:', error);
-    
-    if (error.name === 'ValidationError') {
-      const messages = Object.values(error.errors).map(val => val.message);
-      return formatResponse({ message: 'Validation error', errors: messages }, 400);
-    }
-    
-    return formatResponse({ message: 'Failed to update user' }, 500);
-  }
-});
-
-// DELETE /api/users/[id]
-// Soft delete user by marking as inactive
-export const DELETE = withAuth(async (req) => {
-  try {
-    await dbConnect();
-    // Extract ID from URL path
-    const id = req.url.split('/').pop();
-
-    // Instead of deleting, mark as inactive
-    const user = await User.findOneAndUpdate(
-      { uid: id },
-      { $set: { status: 'inactive', deactivatedAt: new Date() } },
-      { new: true }
+    console.error("GET /users/[id] error:", error);
+    return NextResponse.json(
+      { error: error.message || "Internal server error" },
+      { status: 500 }
     );
+  }
+}
 
-    if (!user) {
-      console.log(`User not found with UID: ${id}`);
-      return formatResponse({ message: 'User not found' }, 404);
+// PUT /api/users/[id]
+export async function PUT(request, { params }) {
+  try {
+    const { id } = await params;
+    const userId = id;
+    
+    await dbConnect();
+    
+    const authData = await requireAuth(request);
+    if (!authData) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    return formatResponse({ message: 'User deactivated successfully' });
+    const { user: authUser } = authData;
+
+    // Check if user is authorized to update this profile
+    // Allow if admin OR if the userId matches either authUser's _id or uid
+    const isAuthorized = 
+      authUser.role === "admin" || 
+      authUser._id.toString() === userId || 
+      authUser.uid === userId;
+
+    if (!isAuthorized) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const body = await request.json();
+    const { name, phone, location, avatar } = body;
+
+    // Only allow updating specific fields
+    const updateData = {};
+    if (name) updateData.name = name;
+    if (phone) updateData.phone = phone;
+    if (location) updateData.location = location;
+    if (avatar) updateData.avatar = avatar;
+
+    let updatedUser;
+
+    // Only try to update by ObjectId if the ID is a valid ObjectId
+    if (isValidObjectId(userId)) {
+      updatedUser = await User.findByIdAndUpdate(
+        userId,
+        updateData,
+        { new: true, runValidators: true }
+      ).select("-password -__v");
+    }
+    
+    // If not found by _id (or ID wasn't a valid ObjectId), try to update by Firebase UID
+    if (!updatedUser) {
+      updatedUser = await User.findOneAndUpdate(
+        { uid: userId },
+        updateData,
+        { new: true, runValidators: true }
+      ).select("-password -__v");
+    }
+
+    if (!updatedUser) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    return NextResponse.json(updatedUser);
   } catch (error) {
-    console.error('Error deactivating user:', error);
-    return formatResponse({ message: 'Failed to deactivate user' }, 500);
+    console.error("PUT /users/[id] error:", error);
+    return NextResponse.json(
+      { error: error.message || "Internal server error" },
+      { status: 500 }
+    );
   }
-});
+}

@@ -5,7 +5,7 @@ import dbConnect from "@/lib/mongodb";
 import User from "@/models/User";
 
 const COOKIE_NAME = "session";
-const TOKEN_EXPIRATION = 14 * 24 * 60 * 60 * 1000; // 14 days
+const TOKEN_EXPIRATION = 14 * 24 * 60 * 60 * 1000; // 14 days in ms
 
 export async function POST(req) {
   try {
@@ -22,7 +22,7 @@ export async function POST(req) {
     // 1. Verify Firebase ID token
     const decoded = await admin.auth().verifyIdToken(token);
 
-    // 2. Create a session cookie (so user doesn’t send bearer token every time)
+    // 2. Create a session cookie (long-lived)
     const sessionCookie = await admin.auth().createSessionCookie(token, {
       expiresIn: TOKEN_EXPIRATION,
     });
@@ -36,7 +36,7 @@ export async function POST(req) {
       );
     }
 
-    // 4. Attach session cookie to response
+    // 4. Build response and attach cookie
     const response = NextResponse.json(
       {
         message: "Login successful",
@@ -57,16 +57,8 @@ export async function POST(req) {
       sameSite: "lax",
       path: "/",
     });
-    // 5. Respond with user + role
-    return NextResponse.json({
-      message: "Login successful",
-      role: decoded.role || "user",
-      subscription: user.subscription,
-      subscriptionExpiry: user.subscriptionExpiry,
-      user,
-    });
 
-    
+    return response;
   } catch (error) {
     console.error("Login Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
