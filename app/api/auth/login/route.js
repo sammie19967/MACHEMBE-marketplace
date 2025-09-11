@@ -57,8 +57,16 @@ export async function POST(req) {
       sameSite: "lax",
       path: "/",
     });
+    // 5. Respond with user + role
+    return NextResponse.json({
+      message: "Login successful",
+      role: decoded.role || "user",
+      subscription: user.subscription,
+      subscriptionExpiry: user.subscriptionExpiry,
+      user,
+    });
 
-    return response;
+    
   } catch (error) {
     console.error("Login Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
