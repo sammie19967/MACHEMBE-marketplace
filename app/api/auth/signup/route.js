@@ -3,6 +3,10 @@ import { NextResponse } from "next/server";
 import admin from "@/lib/firebase-admin";
 import dbConnect from "@/lib/mongodb";
 import User from "@/models/User";
+import { cookies } from "next/headers";
+
+const COOKIE_NAME = "session";
+const TOKEN_EXPIRATION = 14 * 24 * 60 * 60 * 1000; // 14 days
 
 export async function POST(req) {
   try {
@@ -34,8 +38,22 @@ export async function POST(req) {
       });
     }
 
+    // 4. Create session cookie (logs user in)
+    const sessionCookie = await admin.auth().createSessionCookie(token, {
+      expiresIn: TOKEN_EXPIRATION,
+    });
+
+    // 5. Set cookie
+    cookies().set(COOKIE_NAME, sessionCookie, {
+      maxAge: TOKEN_EXPIRATION / 1000,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+    });
+
     return NextResponse.json(
-      { message: "User synced successfully", user },
+      { message: "User signed up & logged in successfully", user },
       { status: 201 }
     );
   } catch (error) {
