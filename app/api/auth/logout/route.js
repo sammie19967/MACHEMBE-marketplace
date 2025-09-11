@@ -1,32 +1,40 @@
-import { cookies } from 'next/headers';
-import { NextResponse } from 'next/server';
+// app/api/auth/logout/route.js
+import { NextResponse } from "next/server";
+import admin from "@/lib/firebase-admin";
+import { cookies } from "next/headers";
 
-export async function POST() {
+const COOKIE_NAME = "session";
+
+export async function POST(req) {
   try {
-    // Get cookie store and wait for it
-    const cookieStore = await cookies();
-    
-    // Check if session cookie exists
-    const sessionCookie = await cookieStore.get('session');
-    
+    // 1. Read cookie
+    const cookieStore = cookies();
+    const sessionCookie = cookieStore.get(COOKIE_NAME)?.value;
+
     if (sessionCookie) {
-      // Delete the session cookie asynchronously
-      await cookieStore.delete('session');
+      try {
+        // 2. Verify session cookie
+        const decoded = await admin.auth().verifySessionCookie(sessionCookie);
+
+        // 3. Revoke Firebase refresh tokens for this user
+        await admin.auth().revokeRefreshTokens(decoded.sub);
+      } catch (err) {
+        console.warn("Logout: invalid or expired session cookie");
+      }
+
+      // 4. Clear cookie
+      cookieStore.set(COOKIE_NAME, "", {
+        maxAge: 0,
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+      });
     }
 
-    return NextResponse.json({ 
-      message: "Logged out successfully",
-      success: true 
-    });
-
+    return NextResponse.json({ message: "Logged out successfully" }, { status: 200 });
   } catch (error) {
-    console.error('Logout error:', error);
-    return NextResponse.json(
-      { 
-        error: process.env.NODE_ENV === 'development' ? error.message : 'Failed to logout',
-        success: false 
-      },
-      { status: 500 }
-    );
+    console.error("Logout Error:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
