@@ -1,64 +1,50 @@
-import { useState } from 'react';
+import { useState } from "react";
 
-export const useCloudinaryUpload = () => {
-  const [isUploading, setIsUploading] = useState(false);
+export default function useCloudinaryUpload() {
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [progress, setProgress] = useState(0);
 
   const uploadFile = async (file) => {
-    if (!file) {
-      setError('No file provided');
-      return null;
-    }
-
-    setIsUploading(true);
+    setLoading(true);
     setError(null);
-    setProgress(0);
 
     try {
+      // 1. Ask backend for signature
+      const sigRes = await fetch("/api/upload", { method: "POST" });
+      if (!sigRes.ok) throw new Error("Failed to get signature");
+      const { timestamp, signature, apiKey, cloudName, uploadPreset, folder } =
+        await sigRes.json();
+
+      // 2. Upload directly to Cloudinary
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append("file", file);
+formData.append("api_key", apiKey);
+formData.append("timestamp", timestamp);
+formData.append("signature", signature);
+formData.append("upload_preset", uploadPreset); // 👈 must match
+formData.append("folder", folder);
 
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        credentials: 'include',
-        body: formData,
-      });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Upload failed');
-      }
+      const uploadRes = await fetch(
+        `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
 
-      const { data } = await response.json();
+      const data = await uploadRes.json();
+      if (!uploadRes.ok) throw new Error(data.error?.message || "Upload failed");
+
       return data;
-    } catch (err) {
-      console.error('Upload error:', err);
-      setError(err.message || 'Failed to upload file');
-      return null;
     } finally {
-      setIsUploading(false);
-      setProgress(100);
+      setLoading(false);
     }
   };
 
   const uploadMultipleFiles = async (files) => {
-    if (!files || !files.length) return [];
-    
-    const uploadPromises = Array.from(files).map(file => uploadFile(file));
-    const results = await Promise.all(uploadPromises);
-    return results.filter(Boolean);
+    return Promise.all(files.map(uploadFile));
   };
 
-  return {
-    uploadFile,
-    uploadMultipleFiles,
-    isUploading,
-    progress,
-    error,
-    reset: () => {
-      setError(null);
-      setProgress(0);
-    }
-  };
-};
+  return { uploadFile, uploadMultipleFiles, loading, error };
+}

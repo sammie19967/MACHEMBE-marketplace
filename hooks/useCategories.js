@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 export default function useCategories() {
   const [categories, setCategories] = useState([]);
@@ -25,10 +25,10 @@ export default function useCategories() {
     fetchCategories();
   }, []);
 
-  const getSubcategories = (categoryName) => {
+  const getSubcategories = useCallback((categoryName) => {
     const category = categories.find(cat => cat.name === categoryName);
     return category?.subcategories || [];
-  };
+  }, [categories]); // Only recreate when categories change
 
   return { categories, loading, error, getSubcategories };
 }

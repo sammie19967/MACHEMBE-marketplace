@@ -1,57 +1,43 @@
-import { NextResponse } from 'next/server';
-import { uploadToCloudinary } from '@/utils/cloudinaryUpload';
-import { requireAuth } from '@/middleware/auth';
+import { v2 as cloudinary } from "cloudinary";
 
-export const config = {
-  api: {
-    bodyParser: {
-      sizeLimit: '10mb',
-    },
-  },
-};
+cloudinary.config({
+  cloud_name: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.NEXT_PUBLIC_CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET, // server-side only
+});
 
-export async function POST(request) {
+export async function POST() {
   try {
-    // Require authentication
-    const authData = await requireAuth(request);
-    if (!authData) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const timestamp = Math.round(new Date().getTime() / 1000);
 
-    const formData = await request.formData();
-    const file = formData.get('file');
+    // ⚡ Must match exactly what client sends
+    const paramsToSign = {
+      folder: "sokoni-products",
+      timestamp,
+      upload_preset: "market", // ✅ include preset here
+    };
 
-    if (!file) {
-      return NextResponse.json(
-        { error: 'No file provided' },
-        { status: 400 }
-      );
-    }
+    const signature = cloudinary.utils.api_sign_request(
+      paramsToSign,
+      process.env.CLOUDINARY_API_SECRET
+    );
 
-    // Upload to Cloudinary
-    const result = await uploadToCloudinary(file, 'marketplace');
-
-    return NextResponse.json({
-      success: true,
-      data: result,
-    });
-
+    return new Response(
+      JSON.stringify({
+        timestamp,
+        signature,
+        apiKey: process.env.NEXT_PUBLIC_CLOUDINARY_API_KEY,
+        cloudName: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
+        uploadPreset: "market",
+        folder: "sokoni-products",
+      }),
+      { status: 200 }
+    );
   } catch (error) {
-    console.error('Upload error:', error);
-    return NextResponse.json(
-      { error: error.message || 'Failed to upload file' },
+    console.error("Signature error:", error);
+    return new Response(
+      JSON.stringify({ error: error.message || "Signature generation failed" }),
       { status: 500 }
     );
   }
-}
-
-export async function OPTIONS() {
-  return new Response(null, {
-    status: 204,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    },
-  });
 }

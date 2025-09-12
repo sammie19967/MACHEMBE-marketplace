@@ -186,17 +186,7 @@ export default function ProfilePage() {
           </form>
         </div>
 
-        {/* Product Form Section */}
-        <div>
-          <div className="mb-8">
-            <h1 className="text-2xl font-bold text-gray-900">Sell a New Product</h1>
-            <p className="mt-1 text-sm text-gray-500">Fill in the details of the product you want to sell.</p>
-          </div>
-          <div className="bg-white shadow-xl rounded-2xl overflow-hidden p-6">
-            <ProductForm />
-          </div>
-        </div>
-      </div>
+       </div>
     </div>
   );
 }

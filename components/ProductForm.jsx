@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { showModal } from './SweetModal';
 import ImageUploader from './ImageUploader';
 import useCategories from '@/hooks/useCategories';
 
-export default function ProductForm({ initialData = {}, isEditing = false }) {
+export default function ProductForm({ initialData = {}, isEditing = false, onSuccess, onCancel }) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [images, setImages] = useState(initialData.images || []);
@@ -24,8 +24,8 @@ export default function ProductForm({ initialData = {}, isEditing = false }) {
     status: initialData.status || 'active',
   });
 
-  // Update subcategories when category changes
-  useEffect(() => {
+  // Memoize the updateSubcategories function
+  const updateSubcategories = useCallback(() => {
     if (formData.category) {
       const subs = getSubcategories(formData.category);
       setSubcategories(subs);
@@ -37,7 +37,12 @@ export default function ProductForm({ initialData = {}, isEditing = false }) {
       setSubcategories([]);
       setFormData(prev => ({ ...prev, subcategory: '' }));
     }
-  }, [formData.category, getSubcategories]);
+  }, [formData.category, formData.subcategory, getSubcategories]);
+
+  // Update subcategories when category changes
+  useEffect(() => {
+    updateSubcategories();
+  }, [formData.category, updateSubcategories]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -134,8 +139,12 @@ export default function ProductForm({ initialData = {}, isEditing = false }) {
         icon: 'success',
       });
 
-      router.push(`/products/${result.data?._id || initialData._id}`);
-      router.refresh();
+      if (onSuccess) {
+        onSuccess(result.data?._id || initialData._id);
+      } else {
+        router.push(`/products/${result.data?._id || initialData._id}`);
+        router.refresh();
+      }
     } catch (error) {
       console.error('Error saving product:', error);
       await showModal({
@@ -357,10 +366,10 @@ export default function ProductForm({ initialData = {}, isEditing = false }) {
       </div>
 
       <div className="pt-5">
-        <div className="flex justify-end">
+        <div className="flex justify-end space-x-3">
           <button
             type="button"
-            onClick={() => router.back()}
+            onClick={onCancel || (() => router.back())}
             className="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
           >
             Cancel
