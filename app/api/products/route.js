@@ -105,7 +105,7 @@ export async function POST(request) {
     const { user } = authData;
     
     // Check if user is a seller or admin
-    if (user.role !== 'seller' && user.role !== 'admin') {
+    if (user.role !== 'user' && user.role !== 'admin') {
       return NextResponse.json(
         { error: 'Forbidden: Only sellers can create products' },
         { status: 403 }

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { withAuth } from '@/middleware/withAuth';
+import { withAuth } from '@/middleware/auth';
 import Product from '@/models/Product';
 import User from '@/models/User';
 import dbConnect from '@/lib/mongodb';

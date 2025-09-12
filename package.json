@@ -9,6 +9,8 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@cloudinary/react": "^1.14.3",
+    "@cloudinary/url-gen": "^1.22.0",
     "@pusher/push-notifications-web": "^1.1.0",
     "cloudinary": "^2.7.0",
     "cookie": "^1.0.2",
